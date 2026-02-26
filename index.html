@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Online Test Platform</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0d0d1a; font-family: 'Segoe UI', system-ui, sans-serif; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0d0d1a; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    input:focus { border-color: #6c63ff !important; }
+    button:hover { opacity: 0.85; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    .fadein { animation: fadeIn 0.4s ease forwards; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ── Test Configuration ── EDIT THIS TO CUSTOMIZE YOUR TEST ──────────────
+    const TEST_CONFIG = {
+      title: "Software Developer Assessment",
+      duration: 45 * 60, // 45 minutes in seconds
+      mcqs: [
+        {
+          id: 1,
+          question: "What is the time complexity of binary search?",
+          options: ["O(n)", "O(log n)", "O(n²)", "O(1)"],
+          correct: 1,
+        },
+        {
+          id: 2,
+          question: "Which of the following is NOT a JavaScript data type?",
+          options: ["String", "Boolean", "Float", "Symbol"],
+          correct: 2,
+        },
+        {
+          id: 3,
+          question: "What does CSS stand for?",
+          options: ["Computer Style Sheets", "Cascading Style Sheets", "Creative Style Syntax", "Colorful Style Sheets"],
+          correct: 1,
+        },
+        {
+          id: 4,
+          question: "Which HTTP method is used to update a resource?",
+          options: ["GET", "POST", "PUT", "DELETE"],
+          correct: 2,
+        },
+        {
+          id: 5,
+          question: "What is a closure in JavaScript?",
+          options: ["A function with no return value", "A function that remembers its lexical scope", "A method to close browser windows", "An async function"],
+          correct: 1,
+        },
+        {
+          id: 6,
+          question: "Which SQL clause filters records after grouping?",
+          options: ["WHERE", "HAVING", "ORDER BY", "FILTER"],
+          correct: 1,
+        },
+        {
+          id: 7,
+          question: "What is the purpose of `useEffect` hook in React?",
+          options: ["To manage component state", "To handle side effects in functional components", "To create custom HTML elements", "To define component styles"],
+          correct: 1,
+        },
+        {
+          id: 8,
+          question: "In OOP, what is encapsulation?",
+          options: ["Inheriting from a parent class", "Bundling data and methods that operate on the data", "Creating multiple instances of a class", "Overriding parent methods"],
+          correct: 1,
+        },
+      ],
+      codingQuestions: [
+        {
+          id: "c1",
+          title: "Reverse a String",
+          description: "Write a function reverseString(str) that takes a string and returns it reversed.\n\nExamples:\n  reverseString('hello')  →  'olleh'\n  reverseString('world')  →  'dlrow'",
+          starterCode: `function reverseString(str) {\n  // Write your solution here\n  \n}\n\n// Test your function\nconsole.log(reverseString('hello'));\nconsole.log(reverseString('world'));`,
+        },
+        {
+          id: "c2",
+          title: "Find Duplicates",
+          description: "Write a function findDuplicates(arr) that takes an array of integers and returns an array of all duplicate values.\n\nExamples:\n  findDuplicates([1, 2, 3, 2, 4, 3])  →  [2, 3]\n  findDuplicates([1, 2, 3])            →  []",
+          starterCode: `function findDuplicates(arr) {\n  // Write your solution here\n  \n}\n\n// Test your function\nconsole.log(findDuplicates([1, 2, 3, 2, 4, 3]));\nconsole.log(findDuplicates([1, 2, 3]));`,
+        },
+      ],
+    };
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    const formatTime = (s) => {
+      const m = Math.floor(s / 60);
+      const sec = s % 60;
+      return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+    };
+
+    const STORAGE_KEY = "test_submissions";
+
+    const getSubmissions = () => {
+      try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        return data ? JSON.parse(data) : [];
+      } catch { return []; }
+    };
+
+    const saveSubmission = (submission) => {
+      const existing = getSubmissions();
+      existing.push(submission);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+    };
+
+    // ── Shared Styles ─────────────────────────────────────────────────────────
+    const S = {
+      screen: { minHeight: "100vh", background: "#0d0d1a", display: "flex", alignItems: "center", justifyContent: "center", color: "#e0e0f0" },
+      primaryBtn: { width: "100%", padding: "14px", background: "linear-gradient(135deg, #6c63ff, #4a42dd)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" },
+      ghostBtn: { padding: "10px 20px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#aaa", cursor: "pointer", fontSize: 13 },
+      label: { display: "block", color: "#888", fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8, fontFamily: "monospace" },
+      input: { width: "100%", padding: "14px 18px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(108,99,255,0.3)", borderRadius: 10, color: "#e0e0f0", fontSize: 15, fontFamily: "monospace", outline: "none", boxSizing: "border-box" },
+    };
+
+    // ── ProgressBar ───────────────────────────────────────────────────────────
+    function ProgressBar({ current, total }) {
+      return (
+        <div style={{ background: "#1a1a2e", borderRadius: 99, height: 6, overflow: "hidden" }}>
+          <div style={{ width: `${(current / total) * 100}%`, height: "100%", background: "linear-gradient(90deg, #6c63ff, #48cfad)", transition: "width 0.4s ease", borderRadius: 99 }} />
+        </div>
+      );
+    }
+
+    // ── Timer ─────────────────────────────────────────────────────────────────
+    function Timer({ seconds, onExpire }) {
+      const [time, setTime] = useState(seconds);
+      const isWarning = time < 300;
+      useEffect(() => {
+        if (time <= 0) { onExpire(); return; }
+        const t = setTimeout(() => setTime(p => p - 1), 1000);
+        return () => clearTimeout(t);
+      }, [time]);
+      return (
+        <div style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 700, color: isWarning ? "#ff6b6b" : "#48cfad", padding: "6px 18px", background: isWarning ? "rgba(255,107,107,0.1)" : "rgba(72,207,173,0.1)", border: `1.5px solid ${isWarning ? "#ff6b6b" : "#48cfad"}`, borderRadius: 8, letterSpacing: 2, animation: isWarning ? "pulse 1s infinite" : "none" }}>
+          ⏱ {formatTime(time)}
+        </div>
+      );
+    }
+
+    // ── SCREEN: Landing ───────────────────────────────────────────────────────
+    function LandingScreen({ onStart, onAdmin }) {
+      const [name, setName] = useState("");
+      const [email, setEmail] = useState("");
+      const [error, setError] = useState("");
+
+      const handleStart = () => {
+        if (!name.trim() || !email.trim()) { setError("Please fill in all fields."); return; }
+        if (!/\S+@\S+\.\S+/.test(email)) { setError("Enter a valid email address."); return; }
+        onStart({ name: name.trim(), email: email.trim() });
+      };
+
+      return (
+        <div style={S.screen}>
+          <div style={{ maxWidth: 520, width: "100%", padding: 24 }} className="fadein">
+            {/* Header */}
+            <div style={{ textAlign: "center", marginBottom: 40 }}>
+              <div style={{ fontSize: 12, letterSpacing: 4, color: "#6c63ff", textTransform: "uppercase", marginBottom: 12, fontFamily: "monospace" }}>
+                APTITUDE · CODING · LOGIC
+              </div>
+              <h1 style={{ margin: 0, fontSize: 38, fontWeight: 800, background: "linear-gradient(135deg, #e0e0f0 0%, #6c63ff 60%, #48cfad 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", lineHeight: 1.15 }}>
+                {TEST_CONFIG.title}
+              </h1>
+              <p style={{ color: "#888", marginTop: 12, fontSize: 14, lineHeight: 1.6 }}>
+                {TEST_CONFIG.mcqs.length} MCQs &nbsp;+&nbsp; {TEST_CONFIG.codingQuestions.length} Coding Problems &nbsp;·&nbsp; {TEST_CONFIG.duration / 60} minutes
+              </p>
+            </div>
+
+            {/* Info cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 32 }}>
+              {[["📋", `${TEST_CONFIG.mcqs.length} MCQs`, "4 pts each"], ["💻", "2 Coding", "15 pts each"], ["⏱", `${TEST_CONFIG.duration / 60} min`, "Timed"]].map(([icon, t, sub]) => (
+                <div key={t} style={{ background: "rgba(108,99,255,0.08)", border: "1px solid rgba(108,99,255,0.2)", borderRadius: 12, padding: "16px 12px", textAlign: "center" }}>
+                  <div style={{ fontSize: 24 }}>{icon}</div>
+                  <div style={{ color: "#e0e0f0", fontWeight: 700, fontSize: 13, marginTop: 6 }}>{t}</div>
+                  <div style={{ color: "#666", fontSize: 11, marginTop: 2 }}>{sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Form */}
+            <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 28 }}>
+              <div style={{ marginBottom: 16 }}>
+                <label style={S.label}>Full Name</label>
+                <input style={S.input} placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && handleStart()} />
+              </div>
+              <div style={{ marginBottom: 20 }}>
+                <label style={S.label}>Email Address</label>
+                <input style={S.input} placeholder="john@example.com" type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleStart()} />
+              </div>
+              {error && <div style={{ color: "#ff6b6b", fontSize: 13, marginBottom: 14 }}>⚠ {error}</div>}
+              <div style={{ background: "rgba(255,193,7,0.08)", border: "1px solid rgba(255,193,7,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 18, fontSize: 13, color: "#aaa" }}>
+                ℹ️ Do not switch tabs during the test — it will be recorded.
+              </div>
+              <button style={S.primaryBtn} onClick={handleStart}>Begin Assessment →</button>
+            </div>
+
+            <div style={{ textAlign: "center", marginTop: 20 }}>
+              <button onClick={onAdmin} style={{ background: "none", border: "none", color: "#555", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
+                Admin Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── SCREEN: Test ──────────────────────────────────────────────────────────
+    function TestScreen({ candidate, onSubmit }) {
+      const [phase, setPhase] = useState("mcq");
+      const [mcqAnswers, setMcqAnswers] = useState({});
+      const [codingAnswers, setCodingAnswers] = useState({
+        c1: TEST_CONFIG.codingQuestions[0].starterCode,
+        c2: TEST_CONFIG.codingQuestions[1].starterCode,
+      });
+      const [currentMcq, setCurrentMcq] = useState(0);
+      const [currentCode, setCurrentCode] = useState(0);
+      const [warnings, setWarnings] = useState(0);
+      const [showWarning, setShowWarning] = useState(false);
+      const expired = useRef(false);
+      const answersRef = useRef({ mcq: {}, coding: {} });
+
+      // Keep ref in sync for use in submit
+      useEffect(() => { answersRef.current = { mcq: mcqAnswers, coding: codingAnswers }; }, [mcqAnswers, codingAnswers]);
+
+      // Anti-cheat
+      useEffect(() => {
+        const handler = () => {
+          if (document.hidden) {
+            setWarnings(w => { setShowWarning(true); setTimeout(() => setShowWarning(false), 3000); return w + 1; });
+          }
+        };
+        document.addEventListener("visibilitychange", handler);
+        return () => document.removeEventListener("visibilitychange", handler);
+      }, []);
+
+      const handleSubmit = useCallback((auto = false) => {
+        const { mcq, coding } = answersRef.current;
+        const mcqScore = TEST_CONFIG.mcqs.reduce((acc, q, i) => acc + (mcq[i] === q.correct ? 4 : 0), 0);
+        const codingScore = TEST_CONFIG.codingQuestions.reduce((acc, cq) => {
+          const code = (coding[cq.id] || "").trim();
+          return acc + (code.length > 60 && code !== cq.starterCode.trim() ? 10 : 0);
+        }, 0);
+        const totalScore = mcqScore + codingScore;
+        const maxScore = TEST_CONFIG.mcqs.length * 4 + 30;
+        const submission = {
+          id: Date.now(),
+          candidate,
+          submittedAt: new Date().toISOString(),
+          mcqScore, codingScore, totalScore, maxScore,
+          percentage: Math.round((totalScore / maxScore) * 100),
+          tabSwitches: warnings,
+          autoSubmit: auto,
+          answers: { mcq, coding },
+        };
+        saveSubmission(submission);
+        onSubmit(submission);
+      }, [warnings]);
+
+      const handleExpire = useCallback(() => {
+        if (!expired.current) { expired.current = true; handleSubmit(true); }
+      }, [handleSubmit]);
+
+      const q = TEST_CONFIG.mcqs[currentMcq];
+      const cq = TEST_CONFIG.codingQuestions[currentCode];
+
+      return (
+        <div style={{ minHeight: "100vh", background: "#0d0d1a", color: "#e0e0f0" }}>
+          {/* Top bar */}
+          <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(13,13,26,0.96)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <span style={{ color: "#6c63ff", fontWeight: 700 }}>{candidate.name}</span>
+              <span style={{ color: "#555", fontSize: 13, marginLeft: 10 }}>{candidate.email}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              {warnings > 0 && <span style={{ fontSize: 12, color: "#ff6b6b", background: "rgba(255,107,107,0.1)", padding: "4px 10px", borderRadius: 6 }}>⚠ {warnings} tab switch{warnings > 1 ? "es" : ""}</span>}
+              <Timer seconds={TEST_CONFIG.duration} onExpire={handleExpire} />
+            </div>
+          </div>
+
+          {showWarning && (
+            <div style={{ position: "fixed", top: 68, left: "50%", transform: "translateX(-50%)", background: "#ff6b6b", color: "#fff", padding: "10px 24px", borderRadius: 8, fontWeight: 700, zIndex: 999, fontSize: 14 }}>
+              ⚠ Tab switch detected! This has been recorded.
+            </div>
+          )}
+
+          {/* Phase tabs */}
+          <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(13,13,26,0.7)" }}>
+            {["mcq", "coding"].map(p => (
+              <button key={p} onClick={() => setPhase(p)} style={{ padding: "13px 32px", background: "none", border: "none", borderBottom: phase === p ? "2.5px solid #6c63ff" : "2.5px solid transparent", color: phase === p ? "#6c63ff" : "#666", fontWeight: 700, fontSize: 13, cursor: "pointer", letterSpacing: 1, textTransform: "uppercase", fontFamily: "monospace" }}>
+                {p === "mcq" ? `📋 MCQs (${Object.keys(mcqAnswers).length}/${TEST_CONFIG.mcqs.length})` : `💻 Coding`}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ maxWidth: 880, margin: "0 auto", padding: "28px 20px" }}>
+
+            {/* ── MCQ Phase ── */}
+            {phase === "mcq" && (
+              <div className="fadein">
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ color: "#888", fontSize: 13 }}>Question {currentMcq + 1} of {TEST_CONFIG.mcqs.length}</span>
+                    <span style={{ color: "#888", fontSize: 13 }}>4 points</span>
+                  </div>
+                  <ProgressBar current={currentMcq + 1} total={TEST_CONFIG.mcqs.length} />
+                </div>
+
+                <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 32, marginBottom: 20 }}>
+                  <p style={{ fontSize: 19, fontWeight: 600, lineHeight: 1.6, margin: "0 0 28px 0" }}>{q.question}</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {q.options.map((opt, i) => {
+                      const selected = mcqAnswers[currentMcq] === i;
+                      return (
+                        <button key={i} onClick={() => setMcqAnswers(a => ({ ...a, [currentMcq]: i }))}
+                          style={{ padding: "13px 18px", borderRadius: 10, border: selected ? "2px solid #6c63ff" : "1.5px solid rgba(255,255,255,0.1)", background: selected ? "rgba(108,99,255,0.15)" : "rgba(255,255,255,0.03)", color: selected ? "#c0baff" : "#ccc", textAlign: "left", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", gap: 12 }}>
+                          <span style={{ width: 26, height: 26, borderRadius: "50%", border: selected ? "2px solid #6c63ff" : "1.5px solid #555", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 11, color: selected ? "#6c63ff" : "#555" }}>
+                            {String.fromCharCode(65 + i)}
+                          </span>
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Navigation */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                  <button style={S.ghostBtn} onClick={() => setCurrentMcq(c => Math.max(0, c - 1))} disabled={currentMcq === 0}>← Prev</button>
+
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
+                    {TEST_CONFIG.mcqs.map((_, i) => (
+                      <button key={i} onClick={() => setCurrentMcq(i)} style={{ width: 32, height: 32, borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: i === currentMcq ? "#6c63ff" : mcqAnswers[i] !== undefined ? "rgba(72,207,173,0.3)" : "rgba(255,255,255,0.08)", color: i === currentMcq ? "#fff" : mcqAnswers[i] !== undefined ? "#48cfad" : "#888" }}>
+                        {i + 1}
+                      </button>
+                    ))}
+                  </div>
+
+                  {currentMcq < TEST_CONFIG.mcqs.length - 1
+                    ? <button style={{ ...S.primaryBtn, width: "auto", padding: "10px 24px" }} onClick={() => setCurrentMcq(c => c + 1)}>Next →</button>
+                    : <button style={{ ...S.primaryBtn, width: "auto", padding: "10px 24px", background: "linear-gradient(135deg,#48cfad,#1a9e7a)" }} onClick={() => setPhase("coding")}>Go to Coding →</button>
+                  }
+                </div>
+              </div>
+            )}
+
+            {/* ── Coding Phase ── */}
+            {phase === "coding" && (
+              <div className="fadein">
+                <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                  {TEST_CONFIG.codingQuestions.map((cq, i) => (
+                    <button key={cq.id} onClick={() => setCurrentCode(i)} style={{ padding: "8px 20px", borderRadius: 8, border: i === currentCode ? "2px solid #6c63ff" : "1.5px solid rgba(255,255,255,0.1)", background: i === currentCode ? "rgba(108,99,255,0.15)" : "transparent", color: i === currentCode ? "#c0baff" : "#888", cursor: "pointer", fontFamily: "monospace", fontWeight: 700, fontSize: 13 }}>
+                      Q{i + 1}: {cq.title}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, minHeight: 480 }}>
+                  {/* Problem statement */}
+                  <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 24, overflowY: "auto" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                      <h3 style={{ margin: 0, color: "#e0e0f0", fontSize: 17 }}>{cq.title}</h3>
+                      <span style={{ fontSize: 12, color: "#48cfad", background: "rgba(72,207,173,0.1)", padding: "3px 10px", borderRadius: 6 }}>15 pts</span>
+                    </div>
+                    <pre style={{ color: "#aaa", fontFamily: "monospace", fontSize: 13, lineHeight: 1.75, whiteSpace: "pre-wrap", margin: 0 }}>{cq.description}</pre>
+                  </div>
+
+                  {/* Code editor */}
+                  <div style={{ border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                    <div style={{ background: "rgba(255,255,255,0.04)", padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", gap: 7 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#ff5f57", display: "inline-block" }} />
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#febc2e", display: "inline-block" }} />
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#28c840", display: "inline-block" }} />
+                      <span style={{ color: "#666", fontSize: 12, fontFamily: "monospace", marginLeft: 8 }}>solution.js</span>
+                    </div>
+                    <textarea
+                      value={codingAnswers[cq.id]}
+                      onChange={e => setCodingAnswers(a => ({ ...a, [cq.id]: e.target.value }))}
+                      spellCheck={false}
+                      style={{ flex: 1, background: "#0d1117", color: "#e0e0f0", border: "none", padding: "18px 16px", fontFamily: "Courier New, monospace", fontSize: 13, lineHeight: 1.75, resize: "none", outline: "none", minHeight: 440 }}
+                      onKeyDown={e => {
+                        if (e.key === "Tab") {
+                          e.preventDefault();
+                          const s = e.target.selectionStart, end = e.target.selectionEnd;
+                          const v = e.target.value;
+                          const newVal = v.substring(0, s) + "  " + v.substring(end);
+                          setCodingAnswers(a => ({ ...a, [cq.id]: newVal }));
+                          setTimeout(() => { e.target.selectionStart = e.target.selectionEnd = s + 2; }, 0);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
+                  <button onClick={() => { if (window.confirm("Are you sure you want to submit the test? This cannot be undone.")) handleSubmit(false); }}
+                    style={{ padding: "14px 40px", background: "linear-gradient(135deg, #ff6b6b, #ee5a24)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}>
+                    Submit Test ✓
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ── SCREEN: Result ────────────────────────────────────────────────────────
+    function ResultScreen({ submission, onHome }) {
+      const { totalScore, maxScore, percentage, mcqScore, codingScore, tabSwitches, autoSubmit, candidate } = submission;
+      const grade = percentage >= 80 ? "Excellent" : percentage >= 60 ? "Good" : percentage >= 40 ? "Average" : "Needs Improvement";
+      const gc = percentage >= 80 ? "#48cfad" : percentage >= 60 ? "#6c63ff" : percentage >= 40 ? "#febc2e" : "#ff6b6b";
+      const circumference = 2 * Math.PI * 70;
+
+      return (
+        <div style={{ ...S.screen, padding: 24 }}>
+          <div style={{ maxWidth: 560, width: "100%", textAlign: "center" }} className="fadein">
+            <div style={{ fontSize: 60, marginBottom: 14 }}>{percentage >= 60 ? "🎉" : "📊"}</div>
+            <h2 style={{ color: "#e0e0f0", fontSize: 28, fontWeight: 800, margin: "0 0 6px" }}>Test Submitted!</h2>
+            <p style={{ color: "#888", marginBottom: 32 }}>Thank you, <strong style={{ color: "#6c63ff" }}>{candidate.name}</strong>. Your results have been recorded.</p>
+
+            {autoSubmit && <div style={{ background: "rgba(255,107,107,0.1)", border: "1px solid #ff6b6b", borderRadius: 10, padding: 12, color: "#ff6b6b", fontSize: 14, marginBottom: 20 }}>⚠ Auto-submitted — time expired.</div>}
+
+            {/* Score circle */}
+            <div style={{ position: "relative", display: "inline-block", marginBottom: 28 }}>
+              <svg width={180} height={180}>
+                <circle cx={90} cy={90} r={70} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={12} />
+                <circle cx={90} cy={90} r={70} fill="none" stroke={gc} strokeWidth={12}
+                  strokeDasharray={circumference}
+                  strokeDashoffset={circumference * (1 - percentage / 100)}
+                  transform="rotate(-90 90 90)" strokeLinecap="round"
+                  style={{ transition: "stroke-dashoffset 1.2s ease" }} />
+              </svg>
+              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center" }}>
+                <div style={{ fontSize: 34, fontWeight: 800, color: gc }}>{percentage}%</div>
+                <div style={{ fontSize: 13, color: "#888" }}>{totalScore}/{maxScore}</div>
+              </div>
+            </div>
+
+            <div style={{ display: "inline-block", background: `${gc}22`, border: `1.5px solid ${gc}`, borderRadius: 8, padding: "5px 20px", color: gc, fontWeight: 700, marginBottom: 28 }}>
+              {grade}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 28 }}>
+              {[["MCQ Score", `${mcqScore}/${TEST_CONFIG.mcqs.length * 4}`, "#6c63ff"], ["Coding Score", `${codingScore}/30`, "#48cfad"], ["Tab Switches", tabSwitches, tabSwitches > 0 ? "#ff6b6b" : "#888"]].map(([label, val, color]) => (
+                <div key={label} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 18 }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color }}>{val}</div>
+                  <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+
+            <button style={S.primaryBtn} onClick={onHome}>← Back to Home</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── SCREEN: Admin ─────────────────────────────────────────────────────────
+    function AdminScreen({ onBack }) {
+      const [submissions, setSubmissions] = useState([]);
+      const [selected, setSelected] = useState(null);
+      const [pwd, setPwd] = useState("");
+      const [authed, setAuthed] = useState(false);
+      const [pwdError, setPwdError] = useState("");
+      const ADMIN_PWD = "admin123"; // ← Change this password
+
+      useEffect(() => {
+        if (authed) setSubmissions(getSubmissions());
+      }, [authed]);
+
+      const tryLogin = () => {
+        if (pwd === ADMIN_PWD) setAuthed(true);
+        else setPwdError("Incorrect password. Try: admin123");
+      };
+
+      if (!authed) {
+        return (
+          <div style={S.screen}>
+            <div style={{ maxWidth: 380, width: "100%", padding: 24 }} className="fadein">
+              <div style={{ textAlign: "center", marginBottom: 28 }}>
+                <div style={{ fontSize: 48 }}>🔐</div>
+                <h2 style={{ color: "#e0e0f0", marginTop: 10 }}>Admin Login</h2>
+                <p style={{ color: "#666", fontSize: 13 }}>Default password: admin123</p>
+              </div>
+              <input type="password" placeholder="Enter password" value={pwd} onChange={e => setPwd(e.target.value)} onKeyDown={e => e.key === "Enter" && tryLogin()} style={{ ...S.input, marginBottom: 14 }} />
+              {pwdError && <div style={{ color: "#ff6b6b", fontSize: 13, marginBottom: 12 }}>⚠ {pwdError}</div>}
+              <button style={S.primaryBtn} onClick={tryLogin}>Login →</button>
+              <div style={{ textAlign: "center", marginTop: 16 }}>
+                <button onClick={onBack} style={{ background: "none", border: "none", color: "#555", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>← Back</button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const sorted = [...submissions].reverse();
+      const avgPct = submissions.length ? Math.round(submissions.reduce((a, s) => a + s.percentage, 0) / submissions.length) : 0;
+      const topPct = submissions.length ? Math.max(...submissions.map(s => s.percentage)) : 0;
+      const passRate = submissions.length ? Math.round((submissions.filter(s => s.percentage >= 60).length / submissions.length) * 100) : 0;
+
+      return (
+        <div style={{ minHeight: "100vh", background: "#0d0d1a", color: "#e0e0f0" }}>
+          <div style={{ background: "rgba(13,13,26,0.97)", borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "15px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#6c63ff" }}>📊 Admin Dashboard</h2>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setSubmissions(getSubmissions())} style={{ ...S.ghostBtn, fontSize: 12 }}>🔄 Refresh</button>
+              <button onClick={onBack} style={S.ghostBtn}>← Exit</button>
+            </div>
+          </div>
+
+          <div style={{ padding: "24px 28px" }}>
+            {/* Stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
+              {[["Total Submissions", submissions.length, "#6c63ff"], ["Avg Score", `${avgPct}%`, "#48cfad"], ["Top Score", `${topPct}%`, "#febc2e"], ["Pass Rate (≥60%)", `${passRate}%`, "#28c840"]].map(([label, val, color]) => (
+                <div key={label} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "18px 20px" }}>
+                  <div style={{ fontSize: 30, fontWeight: 800, color }}>{val}</div>
+                  <div style={{ color: "#888", fontSize: 12, marginTop: 4 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {submissions.length === 0 ? (
+              <div style={{ textAlign: "center", color: "#555", padding: 80, fontSize: 16, border: "1px dashed rgba(255,255,255,0.08)", borderRadius: 14 }}>
+                No submissions yet.<br /><span style={{ fontSize: 13, marginTop: 8, display: "block" }}>Submissions will appear here after candidates complete the test.</span>
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+                  <thead>
+                    <tr style={{ background: "rgba(108,99,255,0.1)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                      {["#", "Name", "Email", "MCQ", "Coding", "Total", "Grade", "Tab Switches", "Date", ""].map(h => (
+                        <th key={h} style={{ padding: "13px 14px", textAlign: "left", color: "#888", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", fontFamily: "monospace", whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sorted.map((s, i) => {
+                      const grade = s.percentage >= 80 ? "Excellent" : s.percentage >= 60 ? "Good" : s.percentage >= 40 ? "Average" : "Weak";
+                      const gc = s.percentage >= 80 ? "#48cfad" : s.percentage >= 60 ? "#6c63ff" : s.percentage >= 40 ? "#febc2e" : "#ff6b6b";
+                      return (
+                        <tr key={s.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}>
+                          <td style={{ padding: "13px 14px", color: "#555", fontSize: 12 }}>{sorted.length - i}</td>
+                          <td style={{ padding: "13px 14px", fontWeight: 700, color: "#e0e0f0", whiteSpace: "nowrap" }}>{s.candidate.name}</td>
+                          <td style={{ padding: "13px 14px", color: "#888", fontSize: 13 }}>{s.candidate.email}</td>
+                          <td style={{ padding: "13px 14px", color: "#6c63ff", fontFamily: "monospace", fontWeight: 700 }}>{s.mcqScore}/{TEST_CONFIG.mcqs.length * 4}</td>
+                          <td style={{ padding: "13px 14px", color: "#48cfad", fontFamily: "monospace", fontWeight: 700 }}>{s.codingScore}/30</td>
+                          <td style={{ padding: "13px 14px", fontWeight: 800, color: gc, fontFamily: "monospace", whiteSpace: "nowrap" }}>{s.totalScore}/{s.maxScore} <span style={{ fontSize: 12 }}>({s.percentage}%)</span></td>
+                          <td style={{ padding: "13px 14px" }}><span style={{ background: `${gc}22`, color: gc, padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>{grade}</span></td>
+                          <td style={{ padding: "13px 14px", color: s.tabSwitches > 0 ? "#ff6b6b" : "#555", fontFamily: "monospace", textAlign: "center" }}>{s.tabSwitches}</td>
+                          <td style={{ padding: "13px 14px", color: "#555", fontSize: 12, whiteSpace: "nowrap" }}>{new Date(s.submittedAt).toLocaleString()}</td>
+                          <td style={{ padding: "13px 14px" }}>
+                            <button onClick={() => setSelected(s)} style={{ background: "rgba(108,99,255,0.2)", border: "1px solid rgba(108,99,255,0.4)", color: "#c0baff", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }}>
+                              View →
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Detail Modal */}
+          {selected && (
+            <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999, padding: 20 }} onClick={() => setSelected(null)}>
+              <div style={{ background: "#12121f", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 32, maxWidth: 720, width: "100%", maxHeight: "85vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                  <div>
+                    <h3 style={{ margin: 0, color: "#e0e0f0" }}>{selected.candidate.name}</h3>
+                    <p style={{ margin: "4px 0 0", color: "#888", fontSize: 13 }}>{selected.candidate.email}</p>
+                  </div>
+                  <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: "#888", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                </div>
+
+                <h4 style={{ color: "#6c63ff", margin: "0 0 12px", fontFamily: "monospace" }}>MCQ ANSWERS</h4>
+                {TEST_CONFIG.mcqs.map((q, i) => {
+                  const ans = selected.answers.mcq[i];
+                  const correct = ans === q.correct;
+                  return (
+                    <div key={i} style={{ marginBottom: 10, padding: 14, borderRadius: 10, background: correct ? "rgba(72,207,173,0.07)" : "rgba(255,107,107,0.07)", border: `1px solid ${correct ? "rgba(72,207,173,0.2)" : "rgba(255,107,107,0.2)"}` }}>
+                      <div style={{ fontSize: 13, color: "#ccc", marginBottom: 5 }}>Q{i + 1}. {q.question}</div>
+                      <div style={{ fontSize: 13, color: correct ? "#48cfad" : "#ff6b6b" }}>
+                        {ans !== undefined ? `${String.fromCharCode(65 + ans)}. ${q.options[ans]}` : "Not answered"}
+                        {correct ? " ✓" : ` ✗  (Correct: ${String.fromCharCode(65 + q.correct)}. ${q.options[q.correct]})`}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <h4 style={{ color: "#6c63ff", margin: "24px 0 12px", fontFamily: "monospace" }}>CODING SUBMISSIONS</h4>
+                {TEST_CONFIG.codingQuestions.map(cq => (
+                  <div key={cq.id} style={{ marginBottom: 18 }}>
+                    <div style={{ color: "#48cfad", fontWeight: 700, marginBottom: 8, fontSize: 14 }}>💻 {cq.title}</div>
+                    <pre style={{ background: "#0d1117", padding: 16, borderRadius: 10, color: "#e0e0f0", fontFamily: "monospace", fontSize: 12, overflowX: "auto", border: "1px solid rgba(255,255,255,0.07)", margin: 0, lineHeight: 1.7 }}>
+                      {selected.answers.coding[cq.id]}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── App Root ──────────────────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState("landing");
+      const [candidate, setCandidate] = useState(null);
+      const [submission, setSubmission] = useState(null);
+
+      return (
+        <>
+          {screen === "landing" && <LandingScreen onStart={c => { setCandidate(c); setScreen("test"); }} onAdmin={() => setScreen("admin")} />}
+          {screen === "test" && <TestScreen candidate={candidate} onSubmit={s => { setSubmission(s); setScreen("result"); }} />}
+          {screen === "result" && <ResultScreen submission={submission} onHome={() => setScreen("landing")} />}
+          {screen === "admin" && <AdminScreen onBack={() => setScreen("landing")} />}
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
